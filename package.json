@@ -1,6 +1,6 @@
 {
   "name": "chat-foundry",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Headless, cross-platform chat logic for React, React Native, and vanilla JS. Supports OpenAI and Anthropic with streaming.",
   "main": "dist/index.js",
   "module": "dist/index.mjs",
