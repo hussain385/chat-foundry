@@ -137,6 +137,35 @@ var anthropicAdapter = {
 function generateId() {
   return Math.random().toString(36).slice(2, 11);
 }
+var sessionStore = /* @__PURE__ */ new Map();
+function getSessionKey(userId, sessionId) {
+  return `${userId != null ? userId : "anonymous"}::${sessionId}`;
+}
+function setSessionMessages(userId, sessionId, messages) {
+  var _a;
+  const key = getSessionKey(userId, sessionId);
+  const session = (_a = sessionStore.get(key)) != null ? _a : { sessionId, userId, messages: [] };
+  sessionStore.set(key, __spreadProps(__spreadValues({}, session), { messages }));
+}
+function clearSession(userId, sessionId) {
+  sessionStore.delete(getSessionKey(userId, sessionId));
+}
+function buildSystemPrompt(basePrompt, userContext) {
+  if (!userContext || Object.keys(userContext).length === 0) return basePrompt;
+  const lines = ["[Current User Information]"];
+  if (userContext.name) lines.push(`- Name: ${userContext.name}`);
+  if (userContext.email) lines.push(`- Email: ${userContext.email}`);
+  for (const [key, value] of Object.entries(userContext)) {
+    if (key === "name" || key === "email") continue;
+    const formatted = Array.isArray(value) ? value.join(", ") : String(value);
+    const label = key.charAt(0).toUpperCase() + key.slice(1);
+    lines.push(`- ${label}: ${formatted}`);
+  }
+  const contextBlock = lines.join("\n");
+  return basePrompt ? `${basePrompt}
+
+${contextBlock}` : contextBlock;
+}
 function getAdapter(config) {
   switch (config.provider) {
     case "openai":
@@ -145,10 +174,10 @@ function getAdapter(config) {
       return anthropicAdapter;
     case "custom":
       throw new Error(
-        '[headless-chat] For "custom" provider, pass a backendUrl that accepts OpenAI-compatible streaming.'
+        '[chat-foundry] For "custom" provider, pass a backendUrl that accepts OpenAI-compatible streaming.'
       );
     default:
-      throw new Error(`[headless-chat] Unknown provider: ${config.provider}`);
+      throw new Error(`[chat-foundry] Unknown provider: ${config.provider}`);
   }
 }
 function streamCompletion(messages, config, callbacks) {
@@ -164,12 +193,10 @@ function streamCompletion(messages, config, callbacks) {
       }));
       if (!response.ok) {
         const errorBody = await response.text();
-        throw new Error(
-          `[headless-chat] HTTP ${response.status}: ${errorBody}`
-        );
+        throw new Error(`[chat-foundry] HTTP ${response.status}: ${errorBody}`);
       }
       if (!response.body) {
-        throw new Error("[headless-chat] Response body is null.");
+        throw new Error("[chat-foundry] Response body is null.");
       }
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
@@ -210,14 +237,22 @@ function streamCompletion(messages, config, callbacks) {
 }
 
 // src/adapters/react.ts
+function makeInitialState(config, sessionId) {
+  var _a;
+  return {
+    messages: (_a = config.initialMessages) != null ? _a : [],
+    isLoading: false,
+    isStreaming: false,
+    streamingMessage: "",
+    error: null,
+    sessionId,
+    userId: config.userId
+  };
+}
 function reducer(state, action) {
   switch (action.type) {
     case "ADD_USER_MESSAGE":
-      return __spreadProps(__spreadValues({}, state), {
-        messages: [...state.messages, action.message],
-        isLoading: true,
-        error: null
-      });
+      return __spreadProps(__spreadValues({}, state), { messages: [...state.messages, action.message], isLoading: true, error: null });
     case "START_STREAMING":
       return __spreadProps(__spreadValues({}, state), { isLoading: false, isStreaming: true, streamingMessage: "" });
     case "APPEND_CHUNK":
@@ -231,31 +266,27 @@ function reducer(state, action) {
     case "SET_ERROR":
       return __spreadProps(__spreadValues({}, state), { error: action.error, isLoading: false, isStreaming: false, streamingMessage: "" });
     case "CLEAR_HISTORY":
-      return __spreadValues({}, initialState);
+      return __spreadProps(__spreadValues({}, state), { messages: [], isLoading: false, isStreaming: false, streamingMessage: "", error: null });
     case "SET_LOADING":
       return __spreadProps(__spreadValues({}, state), { isLoading: action.value });
     default:
       return state;
   }
 }
-var initialState = {
-  messages: [],
-  isLoading: false,
-  isStreaming: false,
-  streamingMessage: "",
-  error: null
-};
 function useChat(config) {
   var _a, _b;
-  const [state, dispatch] = useReducer(reducer, __spreadProps(__spreadValues({}, initialState), {
-    messages: (_a = config.initialMessages) != null ? _a : []
-  }));
+  const sessionIdRef = useRef((_a = config.sessionId) != null ? _a : generateId());
+  const [state, dispatch] = useReducer(
+    reducer,
+    void 0,
+    () => makeInitialState(config, sessionIdRef.current)
+  );
   const abortControllerRef = useRef(null);
   const systemPromptRef = useRef((_b = config.systemPrompt) != null ? _b : "");
+  const userContextRef = useRef(config.userContext);
   const sendMessage = useCallback(
     async (content) => {
-      if (!content.trim()) return;
-      if (state.isLoading || state.isStreaming) return;
+      if (!content.trim() || state.isLoading || state.isStreaming) return;
       const userMessage = {
         id: generateId(),
         role: "user",
@@ -264,9 +295,12 @@ function useChat(config) {
       };
       dispatch({ type: "ADD_USER_MESSAGE", message: userMessage });
       const history = [...state.messages, userMessage];
-      const mergedConfig = __spreadProps(__spreadValues({}, config), {
-        systemPrompt: systemPromptRef.current || config.systemPrompt
-      });
+      setSessionMessages(config.userId, sessionIdRef.current, history);
+      const resolvedSystemPrompt = buildSystemPrompt(
+        systemPromptRef.current || config.systemPrompt,
+        userContextRef.current
+      );
+      const mergedConfig = __spreadProps(__spreadValues({}, config), { systemPrompt: resolvedSystemPrompt });
       let streamingStarted = false;
       abortControllerRef.current = streamCompletion(history, mergedConfig, {
         onChunk(text) {
@@ -283,6 +317,7 @@ function useChat(config) {
             content: fullText,
             createdAt: /* @__PURE__ */ new Date()
           };
+          setSessionMessages(config.userId, sessionIdRef.current, [...history, assistantMessage]);
           dispatch({ type: "FINISH_STREAMING", assistantMessage });
         },
         onError(error) {
@@ -300,32 +335,41 @@ function useChat(config) {
   const clearHistory = useCallback(() => {
     var _a2;
     (_a2 = abortControllerRef.current) == null ? void 0 : _a2.abort();
+    clearSession(config.userId, sessionIdRef.current);
     dispatch({ type: "CLEAR_HISTORY" });
-  }, []);
+  }, [config.userId]);
   const setSystemPrompt = useCallback((prompt) => {
     systemPromptRef.current = prompt;
+  }, []);
+  const setUserContext = useCallback((ctx) => {
+    userContextRef.current = ctx;
   }, []);
   return __spreadProps(__spreadValues({}, state), {
     sendMessage,
     abortResponse,
     clearHistory,
-    setSystemPrompt
+    setSystemPrompt,
+    setUserContext
   });
 }
 
 // src/adapters/vanilla.ts
 function createChat(config) {
-  var _a;
+  var _a, _b;
+  const sessionId = (_a = config.sessionId) != null ? _a : generateId();
   let state = {
     messages: config.initialMessages ? [...config.initialMessages] : [],
     isLoading: false,
     isStreaming: false,
     streamingMessage: "",
-    error: null
+    error: null,
+    sessionId,
+    userId: config.userId
   };
   let abortController = null;
   const listeners = /* @__PURE__ */ new Set();
-  let systemPrompt = (_a = config.systemPrompt) != null ? _a : "";
+  let systemPrompt = (_b = config.systemPrompt) != null ? _b : "";
+  let userContext = config.userContext;
   function setState(partial) {
     state = __spreadValues(__spreadValues({}, state), partial);
     listeners.forEach((l) => l(state));
@@ -344,10 +388,14 @@ function createChat(config) {
     };
     const history = [...state.messages, userMessage];
     setState({ messages: history, isLoading: true, error: null });
-    const mergedConfig = __spreadProps(__spreadValues({}, config), { systemPrompt });
+    setSessionMessages(config.userId, sessionId, history);
+    const resolvedSystemPrompt = buildSystemPrompt(systemPrompt, userContext);
+    const mergedConfig = __spreadProps(__spreadValues({}, config), { systemPrompt: resolvedSystemPrompt });
+    let streamingStarted = false;
     abortController = streamCompletion(history, mergedConfig, {
       onChunk(text) {
-        if (!state.isStreaming) {
+        if (!streamingStarted) {
+          streamingStarted = true;
           setState({ isLoading: false, isStreaming: true, streamingMessage: "" });
         }
         setState({ streamingMessage: state.streamingMessage + text });
@@ -359,11 +407,9 @@ function createChat(config) {
           content: fullText,
           createdAt: /* @__PURE__ */ new Date()
         };
-        setState({
-          messages: [...state.messages, assistantMessage],
-          isStreaming: false,
-          streamingMessage: ""
-        });
+        const finalHistory = [...history, assistantMessage];
+        setSessionMessages(config.userId, sessionId, finalHistory);
+        setState({ messages: finalHistory, isStreaming: false, streamingMessage: "" });
       },
       onError(error) {
         setState({ error, isLoading: false, isStreaming: false, streamingMessage: "" });
@@ -376,19 +422,17 @@ function createChat(config) {
   }
   function clearHistory() {
     abortController == null ? void 0 : abortController.abort();
-    setState({
-      messages: [],
-      isLoading: false,
-      isStreaming: false,
-      streamingMessage: "",
-      error: null
-    });
+    clearSession(config.userId, sessionId);
+    setState({ messages: [], isLoading: false, isStreaming: false, streamingMessage: "", error: null });
   }
   function setSystemPrompt(prompt) {
     systemPrompt = prompt;
   }
+  function setUserContext(ctx) {
+    userContext = ctx;
+  }
   return new Proxy(
-    { subscribe, sendMessage, abortResponse, clearHistory, setSystemPrompt },
+    { subscribe, sendMessage, abortResponse, clearHistory, setSystemPrompt, setUserContext },
     {
       get(target, prop) {
         if (prop in state) return state[prop];
@@ -399,6 +443,7 @@ function createChat(config) {
 }
 export {
   anthropicAdapter,
+  buildSystemPrompt,
   createChat,
   generateId,
   getAdapter,
