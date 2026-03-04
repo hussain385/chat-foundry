@@ -8,6 +8,7 @@ export type {
     ChatActions,
     ChatHookReturn,
     ProviderAdapter,
+    UserContext,
 } from './types/index';
 
 // React / React Native hook
@@ -17,7 +18,7 @@ export { useChat } from './adapters/react';
 export { createChat } from './adapters/vanilla';
 
 // Core engine (for building custom adapters)
-export { streamCompletion, generateId, getAdapter } from './core/ChatEngine';
+export { streamCompletion, generateId, getAdapter, buildSystemPrompt } from './core/ChatEngine';
 
 // Provider adapters (for advanced custom usage)
 export { openaiAdapter } from './providers/openai';

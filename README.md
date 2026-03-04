@@ -2,11 +2,18 @@
 
 A headless, zero-dependency chat logic library for **React**, **React Native**, and **vanilla JS**. Supports **OpenAI** and **Anthropic** with real-time streaming — no UI included, so you bring your own design.
 
+Every user gets their own **isolated chat session** with **personalised responses** powered by user context injection.
+
+---
+
+## Why chat-foundry?
+
 - ✅ Works with any UI framework (React, React Native, Vue, Svelte, plain JS)
+- ✅ Per-user chat isolation via `userId` + `sessionId`
+- ✅ Personalised responses via `userContext` — inject name, plan, orders, anything
 - ✅ Streaming out of the box — chunked `fetch`, no `EventSource` (React Native safe)
-- ✅ TypeScript-first
-- ✅ Zero runtime dependencies
-- ✅ Tiny bundle (~3kb gzipped)
+- ✅ TypeScript-first with full type exports
+- ✅ Zero runtime dependencies (~7kb gzipped)
 
 ---
 
@@ -16,7 +23,7 @@ A headless, zero-dependency chat logic library for **React**, **React Native**, 
 npm install chat-foundry
 ```
 
-React is an **optional** peer dependency. Install it only if you're using the `useChat` hook.
+React is an **optional** peer dependency. Only needed if you use the `useChat` hook.
 
 ---
 
@@ -27,7 +34,7 @@ React is an **optional** peer dependency. Install it only if you're using the `u
 ```tsx
 import { useChat } from 'chat-foundry';
 
-export function MyChatScreen() {
+export function ChatScreen() {
   const {
     messages,
     sendMessage,
@@ -35,11 +42,12 @@ export function MyChatScreen() {
     isStreaming,
     streamingMessage,
     error,
+    sessionId,
     clearHistory,
     abortResponse,
   } = useChat({
     provider: 'openai',
-    apiKey: process.env.OPENAI_API_KEY,   // ⚠️ use backendUrl in production
+    apiKey: process.env.OPENAI_API_KEY, // ⚠️ use backendUrl in production
     model: 'gpt-4o',
     systemPrompt: 'You are a helpful assistant.',
   });
@@ -51,13 +59,11 @@ export function MyChatScreen() {
           <strong>{msg.role}:</strong> {msg.content}
         </div>
       ))}
-
-      {/* Show partial streamed response */}
       {isStreaming && <div><strong>assistant:</strong> {streamingMessage}</div>}
       {isLoading && <div>Thinking...</div>}
       {error && <div>Error: {error.message}</div>}
 
-      <button onClick={() => sendMessage('Tell me a joke')}>Send</button>
+      <button onClick={() => sendMessage('Hello!')}>Send</button>
       <button onClick={abortResponse}>Stop</button>
       <button onClick={clearHistory}>Clear</button>
     </div>
@@ -76,7 +82,73 @@ const chat = useChat({
 });
 ```
 
-### Vanilla JS (Vue, Svelte, plain JS)
+---
+
+## Per-User Chatbot Sessions
+
+Give every user their own isolated chat history and personalised chatbot experience.
+Pass `userId` to isolate sessions in memory, and `userContext` to personalise responses.
+
+```tsx
+import { useChat } from 'chat-foundry';
+
+export function SupportChat({ currentUser }) {
+  const { messages, sendMessage, isStreaming, streamingMessage, setUserContext } = useChat({
+    provider: 'openai',
+    apiKey: process.env.OPENAI_API_KEY,
+
+    // 👤 Isolate chat history per user
+    userId: currentUser.id,
+
+    // 🧠 Tell the chatbot who this user is
+    userContext: {
+      name: currentUser.name,
+      email: currentUser.email,
+      plan: currentUser.membership,         // e.g. 'premium'
+      recentOrders: currentUser.orders,     // e.g. ['iPhone 15', 'AirPods Pro']
+      preferences: currentUser.preferences, // e.g. ['fast shipping']
+    },
+
+    systemPrompt: 'You are a helpful e-commerce support assistant.',
+  });
+
+  // Update context at runtime (e.g. after cart changes)
+  const handleCartUpdate = (newCart) => {
+    setUserContext({ cartItems: newCart });
+  };
+
+  return ( /* your chat UI */ );
+}
+```
+
+The chatbot automatically receives a system prompt like:
+
+```
+You are a helpful e-commerce support assistant.
+
+[Current User Information]
+- Name: Hussain
+- Email: hussain@example.com
+- Plan: premium
+- RecentOrders: iPhone 15, AirPods Pro
+- Preferences: fast shipping
+```
+
+### Multiple users, fully isolated
+
+Different users calling `useChat` with different `userId` values get completely separate conversations — they never see each other's messages.
+
+```tsx
+// User A — their own chatbot session
+useChat({ provider: 'openai', userId: 'user_001', userContext: { name: 'Alice' } });
+
+// User B — their own chatbot session
+useChat({ provider: 'openai', userId: 'user_002', userContext: { name: 'Bob' } });
+```
+
+---
+
+## Vanilla JS (Vue, Svelte, plain JS)
 
 ```js
 import { createChat } from 'chat-foundry';
@@ -84,15 +156,21 @@ import { createChat } from 'chat-foundry';
 const chat = createChat({
   provider: 'openai',
   apiKey: 'sk-...',
+  userId: currentUser.id,
+  userContext: { name: currentUser.name, plan: currentUser.plan },
 });
 
 // Subscribe to state changes
 const unsubscribe = chat.subscribe((state) => {
   console.log('messages:', state.messages);
+  console.log('sessionId:', state.sessionId);
   console.log('streaming:', state.streamingMessage);
 });
 
-await chat.sendMessage('Hello!');
+await chat.sendMessage('What are my recent orders?');
+
+// Update context at runtime
+chat.setUserContext({ cartItems: ['MacBook Pro', 'Magic Mouse'] });
 
 // Later
 unsubscribe();
@@ -107,11 +185,9 @@ unsubscribe();
 ```ts
 useChat({
   provider: 'openai',
-  backendUrl: 'https://your-api.com/api/chat', // Your backend handles the key
-})
+  backendUrl: 'https://your-api.com/api/chat', // your backend adds the secret key
+});
 ```
-
-Your backend receives the same request body and forwards it to OpenAI/Anthropic with the secret key.
 
 ---
 
@@ -123,16 +199,19 @@ Your backend receives the same request body and forwards it to OpenAI/Anthropic 
 | `apiKey` | `string` | — | Provider API key (use `backendUrl` in production) |
 | `backendUrl` | `string` | — | Your own proxy endpoint |
 | `model` | `string` | `gpt-4o` / `claude-sonnet-4-20250514` | Model identifier |
-| `systemPrompt` | `string` | — | System-level instructions |
+| `systemPrompt` | `string` | — | System-level instructions for the chatbot |
 | `temperature` | `number` | `0.7` | Sampling temperature (0–1) |
 | `maxTokens` | `number` | `1024` | Max tokens in response |
 | `initialMessages` | `Message[]` | `[]` | Seed conversation history |
+| `userId` | `string` | — | Unique user ID — isolates chat session in memory |
+| `userContext` | `UserContext` | — | User data injected into the chatbot's system prompt |
+| `sessionId` | `string` | auto-generated | Override the session ID (e.g. to resume a conversation) |
 
 ---
 
 ## API Reference
 
-### `useChat(config)` (React / React Native)
+### `useChat(config)` — React / React Native
 
 Returns a `ChatHookReturn` object:
 
@@ -143,18 +222,31 @@ Returns a `ChatHookReturn` object:
 | `isStreaming` | `boolean` | Tokens are streaming in |
 | `streamingMessage` | `string` | Partial message being built |
 | `error` | `Error \| null` | Last error, if any |
+| `sessionId` | `string` | Unique ID for this conversation |
+| `userId` | `string \| undefined` | The userId this session belongs to |
 | `sendMessage(text)` | `(text: string) => Promise<void>` | Send a user message |
 | `abortResponse()` | `() => void` | Cancel the current stream |
-| `clearHistory()` | `() => void` | Reset conversation |
+| `clearHistory()` | `() => void` | Reset conversation and clear session |
 | `setSystemPrompt(p)` | `(prompt: string) => void` | Override system prompt at runtime |
+| `setUserContext(ctx)` | `(ctx: UserContext) => void` | Update user context at runtime |
 
-### `createChat(config)` (Vanilla JS)
+### `createChat(config)` — Vanilla JS
 
-Returns same fields as `useChat` plus:
+Same fields as `useChat` plus:
 
 | Field | Type | Description |
 |---|---|---|
 | `subscribe(fn)` | `(fn: (state) => void) => () => void` | Subscribe to state changes. Returns unsubscribe fn. |
+
+### `UserContext`
+
+```ts
+interface UserContext {
+  name?: string;
+  email?: string;
+  [key: string]: unknown; // any extra fields: plan, orders, preferences, cartItems…
+}
+```
 
 ---
 
@@ -174,19 +266,12 @@ const myAdapter: ProviderAdapter = {
     };
   },
   parseChunk(chunk) {
-    // return extracted text, or null
+    // return extracted text token, or null
   },
   isDone(chunk) {
     return chunk.includes('[DONE]');
   },
 };
-
-// Use streamCompletion directly
-const controller = streamCompletion(messages, config, {
-  onChunk: (text) => console.log(text),
-  onDone: (full) => console.log('Done:', full),
-  onError: (err) => console.error(err),
-});
 ```
 ---
 

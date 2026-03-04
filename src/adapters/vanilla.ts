@@ -1,5 +1,11 @@
-import type { ChatConfig, ChatState, ChatActions, Message } from '../types';
-import { streamCompletion, generateId } from '../core/ChatEngine';
+import type { ChatConfig, ChatState, ChatActions, Message, UserContext } from '../types/index';
+import {
+    streamCompletion,
+    generateId,
+    buildSystemPrompt,
+    setSessionMessages,
+    clearSession,
+} from '../core/ChatEngine';
 
 export type ChatInstance = ChatState &
     ChatActions & {
@@ -8,24 +14,36 @@ export type ChatInstance = ChatState &
 
 /**
  * createChat — headless chat instance for vanilla JS, Vue, Svelte, etc.
+ * Supports per-user isolation via userId + sessionId, and personalised
+ * responses via userContext.
  *
  * @example
- * const chat = createChat({ provider: 'anthropic', apiKey: 'sk-ant-...' });
- * chat.subscribe(state => console.log(state.messages));
+ * const chat = createChat({
+ *   provider: 'anthropic',
+ *   apiKey: 'sk-ant-...',
+ *   userId: 'user_123',
+ *   userContext: { name: 'Hussain', plan: 'premium' },
+ * });
+ * chat.subscribe(state => renderMessages(state.messages));
  * await chat.sendMessage('Hello!');
  */
 export function createChat(config: ChatConfig): ChatInstance {
+    const sessionId = config.sessionId ?? generateId();
+
     let state: ChatState = {
         messages: config.initialMessages ? [...config.initialMessages] : [],
         isLoading: false,
         isStreaming: false,
         streamingMessage: '',
         error: null,
+        sessionId,
+        userId: config.userId,
     };
 
     let abortController: AbortController | null = null;
     const listeners = new Set<(state: ChatState) => void>();
     let systemPrompt = config.systemPrompt ?? '';
+    let userContext: UserContext | undefined = config.userContext;
 
     function setState(partial: Partial<ChatState>) {
         state = { ...state, ...partial };
@@ -49,12 +67,17 @@ export function createChat(config: ChatConfig): ChatInstance {
 
         const history = [...state.messages, userMessage];
         setState({ messages: history, isLoading: true, error: null });
+        setSessionMessages(config.userId, sessionId, history);
 
-        const mergedConfig: ChatConfig = { ...config, systemPrompt };
+        const resolvedSystemPrompt = buildSystemPrompt(systemPrompt, userContext);
+        const mergedConfig: ChatConfig = { ...config, systemPrompt: resolvedSystemPrompt };
+
+        let streamingStarted = false;
 
         abortController = streamCompletion(history, mergedConfig, {
             onChunk(text) {
-                if (!state.isStreaming) {
+                if (!streamingStarted) {
+                    streamingStarted = true;
                     setState({ isLoading: false, isStreaming: true, streamingMessage: '' });
                 }
                 setState({ streamingMessage: state.streamingMessage + text });
@@ -66,11 +89,9 @@ export function createChat(config: ChatConfig): ChatInstance {
                     content: fullText,
                     createdAt: new Date(),
                 };
-                setState({
-                    messages: [...state.messages, assistantMessage],
-                    isStreaming: false,
-                    streamingMessage: '',
-                });
+                const finalHistory = [...history, assistantMessage];
+                setSessionMessages(config.userId, sessionId, finalHistory);
+                setState({ messages: finalHistory, isStreaming: false, streamingMessage: '' });
             },
             onError(error) {
                 setState({ error, isLoading: false, isStreaming: false, streamingMessage: '' });
@@ -85,22 +106,20 @@ export function createChat(config: ChatConfig): ChatInstance {
 
     function clearHistory() {
         abortController?.abort();
-        setState({
-            messages: [],
-            isLoading: false,
-            isStreaming: false,
-            streamingMessage: '',
-            error: null,
-        });
+        clearSession(config.userId, sessionId);
+        setState({ messages: [], isLoading: false, isStreaming: false, streamingMessage: '', error: null });
     }
 
     function setSystemPrompt(prompt: string) {
         systemPrompt = prompt;
     }
 
-    // Proxy to always return fresh state properties
+    function setUserContext(ctx: UserContext) {
+        userContext = ctx;
+    }
+
     return new Proxy(
-        { subscribe, sendMessage, abortResponse, clearHistory, setSystemPrompt } as unknown as ChatInstance,
+        { subscribe, sendMessage, abortResponse, clearHistory, setSystemPrompt, setUserContext } as unknown as ChatInstance,
         {
             get(target, prop) {
                 if (prop in state) return state[prop as keyof ChatState];
