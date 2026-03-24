@@ -1,6 +1,6 @@
 {
   "name": "chat-foundry",
-  "version": "0.1.1",
+  "version": "0.1.3",
   "description": "Headless, cross-platform chat logic for React, React Native, and vanilla JS. Supports OpenAI and Anthropic with streaming.",
   "main": "dist/index.js",
   "module": "dist/index.mjs",
@@ -23,6 +23,14 @@
     "test:watch": "vitest",
     "prepublishOnly": "npm run build && npm run typecheck"
   },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/hussain385/chat-foundry.git"
+  },
+  "homepage": "https://github.com/hussain385/chat-foundry#readme",
+  "bugs": {
+    "url": "https://github.com/hussain385/chat-foundry/issues"
+  },
   "keywords": [
     "chat",
     "chatbot",
@@ -32,6 +40,8 @@
     "streaming",
     "react",
     "react-native",
+    "web-chatbot",
+    "mobile-chatbot",
     "hook",
     "ai",
     "llm"
