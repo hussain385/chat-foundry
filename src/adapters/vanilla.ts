@@ -3,6 +3,7 @@ import {
     streamCompletion,
     generateId,
     buildSystemPrompt,
+    getSession,
     setSessionMessages,
     clearSession,
 } from '../core/ChatEngine';
@@ -29,9 +30,12 @@ export type ChatInstance = ChatState &
  */
 export function createChat(config: ChatConfig): ChatInstance {
     const sessionId = config.sessionId ?? generateId();
+    const existingMessages = getSession(config.userId, sessionId).messages;
 
     let state: ChatState = {
-        messages: config.initialMessages ? [...config.initialMessages] : [],
+        messages: existingMessages.length > 0
+            ? existingMessages
+            : (config.initialMessages ? [...config.initialMessages] : []),
         isLoading: false,
         isStreaming: false,
         streamingMessage: '',

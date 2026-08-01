@@ -77,7 +77,7 @@ export function ChatScreen() {
 const chat = useChat({
   provider: 'anthropic',
   apiKey: process.env.ANTHROPIC_API_KEY,
-  model: 'claude-sonnet-4-20250514',
+  model: 'claude-sonnet-5',
   systemPrompt: 'You are a concise assistant.',
 });
 ```
@@ -198,7 +198,7 @@ useChat({
 | `provider` | `'openai' \| 'anthropic' \| 'custom'` | — | **Required.** AI provider |
 | `apiKey` | `string` | — | Provider API key (use `backendUrl` in production) |
 | `backendUrl` | `string` | — | Your own proxy endpoint |
-| `model` | `string` | `gpt-4o` / `claude-sonnet-4-20250514` | Model identifier |
+| `model` | `string` | `gpt-4o` / `claude-sonnet-5` | Model identifier |
 | `systemPrompt` | `string` | — | System-level instructions for the chatbot |
 | `temperature` | `number` | `0.7` | Sampling temperature (0–1) |
 | `maxTokens` | `number` | `1024` | Max tokens in response |

@@ -85,7 +85,7 @@ var anthropicAdapter = {
     var _a, _b, _c, _d;
     const url = (_a = config.backendUrl) != null ? _a : "https://api.anthropic.com/v1/messages";
     const body = __spreadProps(__spreadValues({
-      model: (_b = config.model) != null ? _b : "claude-sonnet-4-20250514",
+      model: (_b = config.model) != null ? _b : "claude-sonnet-5",
       stream: true,
       max_tokens: (_c = config.maxTokens) != null ? _c : 1024,
       temperature: (_d = config.temperature) != null ? _d : 0.7
@@ -141,6 +141,13 @@ var sessionStore = /* @__PURE__ */ new Map();
 function getSessionKey(userId, sessionId) {
   return `${userId != null ? userId : "anonymous"}::${sessionId}`;
 }
+function getSession(userId, sessionId) {
+  const key = getSessionKey(userId, sessionId);
+  if (!sessionStore.has(key)) {
+    sessionStore.set(key, { sessionId, userId, messages: [] });
+  }
+  return sessionStore.get(key);
+}
 function setSessionMessages(userId, sessionId, messages) {
   var _a;
   const key = getSessionKey(userId, sessionId);
@@ -157,7 +164,14 @@ function buildSystemPrompt(basePrompt, userContext) {
   if (userContext.email) lines.push(`- Email: ${userContext.email}`);
   for (const [key, value] of Object.entries(userContext)) {
     if (key === "name" || key === "email") continue;
-    const formatted = Array.isArray(value) ? value.join(", ") : String(value);
+    let formatted;
+    if (Array.isArray(value)) {
+      formatted = value.join(", ");
+    } else if (typeof value === "object" && value !== null) {
+      formatted = JSON.stringify(value);
+    } else {
+      formatted = String(value);
+    }
     const label = key.charAt(0).toUpperCase() + key.slice(1);
     lines.push(`- ${label}: ${formatted}`);
   }
@@ -239,8 +253,9 @@ function streamCompletion(messages, config, callbacks) {
 // src/adapters/react.ts
 function makeInitialState(config, sessionId) {
   var _a;
+  const existing = getSession(config.userId, sessionId).messages;
   return {
-    messages: (_a = config.initialMessages) != null ? _a : [],
+    messages: existing.length > 0 ? existing : (_a = config.initialMessages) != null ? _a : [],
     isLoading: false,
     isStreaming: false,
     streamingMessage: "",
@@ -269,6 +284,8 @@ function reducer(state, action) {
       return __spreadProps(__spreadValues({}, state), { messages: [], isLoading: false, isStreaming: false, streamingMessage: "", error: null });
     case "SET_LOADING":
       return __spreadProps(__spreadValues({}, state), { isLoading: action.value });
+    case "ABORT":
+      return __spreadProps(__spreadValues({}, state), { isLoading: false, isStreaming: false, streamingMessage: "" });
     default:
       return state;
   }
@@ -297,7 +314,7 @@ function useChat(config) {
       const history = [...state.messages, userMessage];
       setSessionMessages(config.userId, sessionIdRef.current, history);
       const resolvedSystemPrompt = buildSystemPrompt(
-        systemPromptRef.current || config.systemPrompt,
+        systemPromptRef.current,
         userContextRef.current
       );
       const mergedConfig = __spreadProps(__spreadValues({}, config), { systemPrompt: resolvedSystemPrompt });
@@ -330,7 +347,7 @@ function useChat(config) {
   const abortResponse = useCallback(() => {
     var _a2;
     (_a2 = abortControllerRef.current) == null ? void 0 : _a2.abort();
-    dispatch({ type: "SET_LOADING", value: false });
+    dispatch({ type: "ABORT" });
   }, []);
   const clearHistory = useCallback(() => {
     var _a2;
@@ -357,8 +374,9 @@ function useChat(config) {
 function createChat(config) {
   var _a, _b;
   const sessionId = (_a = config.sessionId) != null ? _a : generateId();
+  const existingMessages = getSession(config.userId, sessionId).messages;
   let state = {
-    messages: config.initialMessages ? [...config.initialMessages] : [],
+    messages: existingMessages.length > 0 ? existingMessages : config.initialMessages ? [...config.initialMessages] : [],
     isLoading: false,
     isStreaming: false,
     streamingMessage: "",

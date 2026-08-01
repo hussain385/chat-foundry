@@ -62,7 +62,14 @@ export function buildSystemPrompt(
     // Append any extra fields generically
     for (const [key, value] of Object.entries(userContext)) {
         if (key === 'name' || key === 'email') continue;
-        const formatted = Array.isArray(value) ? value.join(', ') : String(value);
+        let formatted: string;
+        if (Array.isArray(value)) {
+            formatted = value.join(', ');
+        } else if (typeof value === 'object' && value !== null) {
+            formatted = JSON.stringify(value);
+        } else {
+            formatted = String(value);
+        }
         const label = key.charAt(0).toUpperCase() + key.slice(1);
         lines.push(`- ${label}: ${formatted}`);
     }

@@ -6,7 +6,7 @@ export const anthropicAdapter: ProviderAdapter = {
       config.backendUrl ?? 'https://api.anthropic.com/v1/messages';
 
     const body = {
-      model: config.model ?? 'claude-sonnet-4-20250514',
+      model: config.model ?? 'claude-sonnet-5',
       stream: true,
       max_tokens: config.maxTokens ?? 1024,
       temperature: config.temperature ?? 0.7,

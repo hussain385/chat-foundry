@@ -4,6 +4,7 @@ import {
     streamCompletion,
     generateId,
     buildSystemPrompt,
+    getSession,
     setSessionMessages,
     clearSession,
 } from '../core/ChatEngine';
@@ -19,11 +20,13 @@ type Action =
     | { type: 'FINISH_STREAMING'; assistantMessage: Message }
     | { type: 'SET_ERROR'; error: Error }
     | { type: 'CLEAR_HISTORY' }
-    | { type: 'SET_LOADING'; value: boolean };
+    | { type: 'SET_LOADING'; value: boolean }
+    | { type: 'ABORT' };
 
 function makeInitialState(config: ChatConfig, sessionId: string): ChatState {
+    const existing = getSession(config.userId, sessionId).messages;
     return {
-        messages: config.initialMessages ?? [],
+        messages: existing.length > 0 ? existing : (config.initialMessages ?? []),
         isLoading: false,
         isStreaming: false,
         streamingMessage: '',
@@ -54,6 +57,8 @@ function reducer(state: ChatState, action: Action): ChatState {
             return { ...state, messages: [], isLoading: false, isStreaming: false, streamingMessage: '', error: null };
         case 'SET_LOADING':
             return { ...state, isLoading: action.value };
+        case 'ABORT':
+            return { ...state, isLoading: false, isStreaming: false, streamingMessage: '' };
         default:
             return state;
     }
@@ -110,7 +115,7 @@ export function useChat(config: ChatConfig): ChatHookReturn {
             setSessionMessages(config.userId, sessionIdRef.current, history);
 
             const resolvedSystemPrompt = buildSystemPrompt(
-                systemPromptRef.current || config.systemPrompt,
+                systemPromptRef.current,
                 userContextRef.current
             );
 
@@ -146,7 +151,7 @@ export function useChat(config: ChatConfig): ChatHookReturn {
 
     const abortResponse = useCallback(() => {
         abortControllerRef.current?.abort();
-        dispatch({ type: 'SET_LOADING', value: false });
+        dispatch({ type: 'ABORT' });
     }, []);
 
     const clearHistory = useCallback(() => {
