@@ -1,0 +1,23 @@
+# Dependencies
+/node_modules
+
+# OS junk
+.DS_Store
+Thumbs.db
+
+# Editors / IDEs
+.idea/
+.vscode/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Env
+.env
+.env.*
+!.env.example
+
+# Test/coverage output
+coverage/
+.nyc_output/
