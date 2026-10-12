@@ -29,8 +29,8 @@
     "native"
   ],
   "scripts": {
-    "build": "node api.js && tsup",
-    "dev": "node api.js && tsup --watch",
+    "build": "tsup",
+    "dev": "tsup --watch",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
