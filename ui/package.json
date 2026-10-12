@@ -1,0 +1,6 @@
+{
+  "private": true,
+  "main": "../dist/ui.js",
+  "module": "../dist/ui.mjs",
+  "types": "../dist/ui.d.ts"
+}

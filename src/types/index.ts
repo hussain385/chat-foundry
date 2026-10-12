@@ -31,6 +31,12 @@ export interface ChatConfig {
     model?: string;
     /** System prompt */
     systemPrompt?: string;
+    /**
+     * Display name for the AI assistant, e.g. 'Nova'.
+     * Injected into the system prompt so the model knows its own name,
+     * and shown by the optional UI components.
+     */
+    assistantName?: string;
     /** Sampling temperature (0-1) */
     temperature?: number;
     /** Max tokens in response */

@@ -116,7 +116,8 @@ export function useChat(config: ChatConfig): ChatHookReturn {
 
             const resolvedSystemPrompt = buildSystemPrompt(
                 systemPromptRef.current,
-                userContextRef.current
+                userContextRef.current,
+                config.assistantName
             );
 
             const mergedConfig: ChatConfig = { ...config, systemPrompt: resolvedSystemPrompt };

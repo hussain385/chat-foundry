@@ -21,3 +21,6 @@ npm-debug.log*
 # Test/coverage output
 coverage/
 .nyc_output/
+
+# notes
+release-notes

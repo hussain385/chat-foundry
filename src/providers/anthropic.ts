@@ -6,10 +6,14 @@ export const anthropicAdapter: ProviderAdapter = {
       config.backendUrl ?? 'https://api.anthropic.com/v1/messages';
 
     const body = {
-      model: config.model ?? 'claude-sonnet-5',
+      model: config.model ?? 'claude-opus-5-5',
       stream: true,
-      max_tokens: config.maxTokens ?? 1024,
-      temperature: config.temperature ?? 0.7,
+      // Current models think before answering, and thinking counts toward max_tokens
+      max_tokens: config.maxTokens ?? 16000,
+      // Current Claude models reject non-default sampling params, so only send when set
+      ...(config.temperature !== undefined ? { temperature: config.temperature } : {}),
+      // Server-side refusal fallback (Claude API only; proxies may not forward the beta header)
+      ...(config.backendUrl ? {} : { fallbacks: 'default' }),
       ...(config.systemPrompt ? { system: config.systemPrompt } : {}),
       messages: messages
         .filter((m) => m.role !== 'system')
@@ -20,6 +24,10 @@ export const anthropicAdapter: ProviderAdapter = {
       'Content-Type': 'application/json',
       'anthropic-version': '2023-06-01',
     };
+
+    if (!config.backendUrl) {
+      headers['anthropic-beta'] = 'server-side-fallback-2026-07-01';
+    }
 
     if (config.apiKey) {
       headers['x-api-key'] = config.apiKey;
@@ -40,8 +48,9 @@ export const anthropicAdapter: ProviderAdapter = {
     const data = line.slice(6);
     try {
       const parsed = JSON.parse(data);
-      if (parsed.type === 'content_block_delta') {
-        return parsed.delta?.text ?? null;
+      // Skip thinking_delta and other non-text deltas
+      if (parsed.type === 'content_block_delta' && parsed.delta?.type === 'text_delta') {
+        return parsed.delta.text ?? null;
       }
       return null;
     } catch {

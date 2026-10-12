@@ -6,10 +6,12 @@ export const openaiAdapter: ProviderAdapter = {
       config.backendUrl ?? 'https://api.openai.com/v1/chat/completions';
 
     const body = {
-      model: config.model ?? 'gpt-4o',
+      model: config.model ?? 'gpt-6.1-sol',
       stream: true,
-      temperature: config.temperature ?? 0.7,
-      max_tokens: config.maxTokens ?? 1024,
+      // Reasoning models reject non-default temperature, so only send when set
+      ...(config.temperature !== undefined ? { temperature: config.temperature } : {}),
+      // Reasoning models reject max_tokens; this limit also covers reasoning tokens
+      max_completion_tokens: config.maxTokens ?? 16000,
       messages: [
         ...(config.systemPrompt
           ? [{ role: 'system', content: config.systemPrompt }]

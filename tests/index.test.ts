@@ -108,8 +108,18 @@ describe('anthropicAdapter', () => {
   });
 
   it('parses a content_block_delta chunk', () => {
-    const chunk = `data: {"type":"content_block_delta","delta":{"text":"Hi"}}`;
+    const chunk = `data: {"type":"content_block_delta","delta":{"type":"text_delta","text":"Hi"}}`;
     expect(anthropicAdapter.parseChunk(chunk)).toBe('Hi');
+  });
+
+  it('ignores thinking deltas', () => {
+    const chunk = `data: {"type":"content_block_delta","delta":{"type":"thinking_delta","thinking":"hmm"}}`;
+    expect(anthropicAdapter.parseChunk(chunk)).toBeNull();
+  });
+
+  it('omits temperature unless explicitly set', () => {
+    const { body } = anthropicAdapter.buildRequest([], { provider: 'anthropic' });
+    expect(JSON.parse(body as string).temperature).toBeUndefined();
   });
 
   it('detects message_stop as done', () => {

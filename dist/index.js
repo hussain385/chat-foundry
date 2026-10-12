@@ -1,410 +1,23 @@
-"use strict";
-var __defProp = Object.defineProperty;
-var __defProps = Object.defineProperties;
-var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
-var __getOwnPropDescs = Object.getOwnPropertyDescriptors;
-var __getOwnPropNames = Object.getOwnPropertyNames;
-var __getOwnPropSymbols = Object.getOwnPropertySymbols;
-var __hasOwnProp = Object.prototype.hasOwnProperty;
-var __propIsEnum = Object.prototype.propertyIsEnumerable;
-var __defNormalProp = (obj, key, value) => key in obj ? __defProp(obj, key, { enumerable: true, configurable: true, writable: true, value }) : obj[key] = value;
-var __spreadValues = (a, b) => {
-  for (var prop in b || (b = {}))
-    if (__hasOwnProp.call(b, prop))
-      __defNormalProp(a, prop, b[prop]);
-  if (__getOwnPropSymbols)
-    for (var prop of __getOwnPropSymbols(b)) {
-      if (__propIsEnum.call(b, prop))
-        __defNormalProp(a, prop, b[prop]);
-    }
-  return a;
-};
-var __spreadProps = (a, b) => __defProps(a, __getOwnPropDescs(b));
-var __objRest = (source, exclude) => {
-  var target = {};
-  for (var prop in source)
-    if (__hasOwnProp.call(source, prop) && exclude.indexOf(prop) < 0)
-      target[prop] = source[prop];
-  if (source != null && __getOwnPropSymbols)
-    for (var prop of __getOwnPropSymbols(source)) {
-      if (exclude.indexOf(prop) < 0 && __propIsEnum.call(source, prop))
-        target[prop] = source[prop];
-    }
-  return target;
-};
-var __export = (target, all) => {
-  for (var name in all)
-    __defProp(target, name, { get: all[name], enumerable: true });
-};
-var __copyProps = (to, from, except, desc) => {
-  if (from && typeof from === "object" || typeof from === "function") {
-    for (let key of __getOwnPropNames(from))
-      if (!__hasOwnProp.call(to, key) && key !== except)
-        __defProp(to, key, { get: () => from[key], enumerable: !(desc = __getOwnPropDesc(from, key)) || desc.enumerable });
-  }
-  return to;
-};
-var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
+"use strict";Object.defineProperty(exports, "__esModule", {value: true});
 
-// src/index.ts
-var index_exports = {};
-__export(index_exports, {
-  anthropicAdapter: () => anthropicAdapter,
-  buildSystemPrompt: () => buildSystemPrompt,
-  createChat: () => createChat,
-  generateId: () => generateId,
-  getAdapter: () => getAdapter,
-  openaiAdapter: () => openaiAdapter,
-  streamCompletion: () => streamCompletion,
-  useChat: () => useChat
-});
-module.exports = __toCommonJS(index_exports);
 
-// src/adapters/react.ts
-var import_react = require("react");
 
-// src/providers/openai.ts
-var openaiAdapter = {
-  buildRequest(messages, config) {
-    var _a, _b, _c, _d;
-    const url = (_a = config.backendUrl) != null ? _a : "https://api.openai.com/v1/chat/completions";
-    const body = {
-      model: (_b = config.model) != null ? _b : "gpt-4o",
-      stream: true,
-      temperature: (_c = config.temperature) != null ? _c : 0.7,
-      max_tokens: (_d = config.maxTokens) != null ? _d : 1024,
-      messages: [
-        ...config.systemPrompt ? [{ role: "system", content: config.systemPrompt }] : [],
-        ...messages.map((m) => ({ role: m.role, content: m.content }))
-      ]
-    };
-    const headers = {
-      "Content-Type": "application/json"
-    };
-    if (config.apiKey) {
-      headers["Authorization"] = `Bearer ${config.apiKey}`;
-    }
-    return {
-      url,
-      method: "POST",
-      headers,
-      body: JSON.stringify(body)
-    };
-  },
-  parseChunk(chunk) {
-    var _a, _b, _c, _d;
-    const line = chunk.trim();
-    if (!line.startsWith("data: ")) return null;
-    const data = line.slice(6);
-    if (data === "[DONE]") return null;
-    try {
-      const parsed = JSON.parse(data);
-      return (_d = (_c = (_b = (_a = parsed.choices) == null ? void 0 : _a[0]) == null ? void 0 : _b.delta) == null ? void 0 : _c.content) != null ? _d : null;
-    } catch (e) {
-      return null;
-    }
-  },
-  isDone(chunk) {
-    return chunk.trim() === "data: [DONE]";
-  }
-};
 
-// src/providers/anthropic.ts
-var anthropicAdapter = {
-  buildRequest(messages, config) {
-    var _a, _b, _c, _d;
-    const url = (_a = config.backendUrl) != null ? _a : "https://api.anthropic.com/v1/messages";
-    const body = __spreadProps(__spreadValues({
-      model: (_b = config.model) != null ? _b : "claude-sonnet-5",
-      stream: true,
-      max_tokens: (_c = config.maxTokens) != null ? _c : 1024,
-      temperature: (_d = config.temperature) != null ? _d : 0.7
-    }, config.systemPrompt ? { system: config.systemPrompt } : {}), {
-      messages: messages.filter((m) => m.role !== "system").map((m) => ({ role: m.role, content: m.content }))
-    });
-    const headers = {
-      "Content-Type": "application/json",
-      "anthropic-version": "2023-06-01"
-    };
-    if (config.apiKey) {
-      headers["x-api-key"] = config.apiKey;
-    }
-    return {
-      url,
-      method: "POST",
-      headers,
-      body: JSON.stringify(body)
-    };
-  },
-  parseChunk(chunk) {
-    var _a, _b;
-    const line = chunk.trim();
-    if (!line.startsWith("data: ")) return null;
-    const data = line.slice(6);
-    try {
-      const parsed = JSON.parse(data);
-      if (parsed.type === "content_block_delta") {
-        return (_b = (_a = parsed.delta) == null ? void 0 : _a.text) != null ? _b : null;
-      }
-      return null;
-    } catch (e) {
-      return null;
-    }
-  },
-  isDone(chunk) {
-    try {
-      const line = chunk.trim();
-      if (!line.startsWith("data: ")) return false;
-      const parsed = JSON.parse(line.slice(6));
-      return parsed.type === "message_stop";
-    } catch (e) {
-      return false;
-    }
-  }
-};
 
-// src/core/ChatEngine.ts
-function generateId() {
-  return Math.random().toString(36).slice(2, 11);
-}
-var sessionStore = /* @__PURE__ */ new Map();
-function getSessionKey(userId, sessionId) {
-  return `${userId != null ? userId : "anonymous"}::${sessionId}`;
-}
-function getSession(userId, sessionId) {
-  const key = getSessionKey(userId, sessionId);
-  if (!sessionStore.has(key)) {
-    sessionStore.set(key, { sessionId, userId, messages: [] });
-  }
-  return sessionStore.get(key);
-}
-function setSessionMessages(userId, sessionId, messages) {
-  var _a;
-  const key = getSessionKey(userId, sessionId);
-  const session = (_a = sessionStore.get(key)) != null ? _a : { sessionId, userId, messages: [] };
-  sessionStore.set(key, __spreadProps(__spreadValues({}, session), { messages }));
-}
-function clearSession(userId, sessionId) {
-  sessionStore.delete(getSessionKey(userId, sessionId));
-}
-function buildSystemPrompt(basePrompt, userContext) {
-  if (!userContext || Object.keys(userContext).length === 0) return basePrompt;
-  const lines = ["[Current User Information]"];
-  if (userContext.name) lines.push(`- Name: ${userContext.name}`);
-  if (userContext.email) lines.push(`- Email: ${userContext.email}`);
-  for (const [key, value] of Object.entries(userContext)) {
-    if (key === "name" || key === "email") continue;
-    let formatted;
-    if (Array.isArray(value)) {
-      formatted = value.join(", ");
-    } else if (typeof value === "object" && value !== null) {
-      formatted = JSON.stringify(value);
-    } else {
-      formatted = String(value);
-    }
-    const label = key.charAt(0).toUpperCase() + key.slice(1);
-    lines.push(`- ${label}: ${formatted}`);
-  }
-  const contextBlock = lines.join("\n");
-  return basePrompt ? `${basePrompt}
 
-${contextBlock}` : contextBlock;
-}
-function getAdapter(config) {
-  switch (config.provider) {
-    case "openai":
-      return openaiAdapter;
-    case "anthropic":
-      return anthropicAdapter;
-    case "custom":
-      throw new Error(
-        '[chat-foundry] For "custom" provider, pass a backendUrl that accepts OpenAI-compatible streaming.'
-      );
-    default:
-      throw new Error(`[chat-foundry] Unknown provider: ${config.provider}`);
-  }
-}
-function streamCompletion(messages, config, callbacks) {
-  const controller = new AbortController();
-  const adapter = getAdapter(config);
-  const _a = adapter.buildRequest(messages, config), { url } = _a, requestInit = __objRest(_a, ["url"]);
-  let fullText = "";
-  (async () => {
-    var _a2;
-    try {
-      const response = await fetch(url, __spreadProps(__spreadValues({}, requestInit), {
-        signal: controller.signal
-      }));
-      if (!response.ok) {
-        const errorBody = await response.text();
-        throw new Error(`[chat-foundry] HTTP ${response.status}: ${errorBody}`);
-      }
-      if (!response.body) {
-        throw new Error("[chat-foundry] Response body is null.");
-      }
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = (_a2 = lines.pop()) != null ? _a2 : "";
-        for (const line of lines) {
-          if (!line.trim()) continue;
-          if (adapter.isDone(line)) {
-            callbacks.onDone(fullText);
-            return;
-          }
-          const text = adapter.parseChunk(line);
-          if (text) {
-            fullText += text;
-            callbacks.onChunk(text);
-          }
-        }
-      }
-      if (buffer.trim()) {
-        const text = adapter.parseChunk(buffer);
-        if (text) {
-          fullText += text;
-          callbacks.onChunk(text);
-        }
-      }
-      callbacks.onDone(fullText);
-    } catch (err) {
-      if (err.name === "AbortError") return;
-      callbacks.onError(err instanceof Error ? err : new Error(String(err)));
-    }
-  })();
-  return controller;
-}
 
-// src/adapters/react.ts
-function makeInitialState(config, sessionId) {
-  var _a;
-  const existing = getSession(config.userId, sessionId).messages;
-  return {
-    messages: existing.length > 0 ? existing : (_a = config.initialMessages) != null ? _a : [],
-    isLoading: false,
-    isStreaming: false,
-    streamingMessage: "",
-    error: null,
-    sessionId,
-    userId: config.userId
-  };
-}
-function reducer(state, action) {
-  switch (action.type) {
-    case "ADD_USER_MESSAGE":
-      return __spreadProps(__spreadValues({}, state), { messages: [...state.messages, action.message], isLoading: true, error: null });
-    case "START_STREAMING":
-      return __spreadProps(__spreadValues({}, state), { isLoading: false, isStreaming: true, streamingMessage: "" });
-    case "APPEND_CHUNK":
-      return __spreadProps(__spreadValues({}, state), { streamingMessage: state.streamingMessage + action.text });
-    case "FINISH_STREAMING":
-      return __spreadProps(__spreadValues({}, state), {
-        messages: [...state.messages, action.assistantMessage],
-        isStreaming: false,
-        streamingMessage: ""
-      });
-    case "SET_ERROR":
-      return __spreadProps(__spreadValues({}, state), { error: action.error, isLoading: false, isStreaming: false, streamingMessage: "" });
-    case "CLEAR_HISTORY":
-      return __spreadProps(__spreadValues({}, state), { messages: [], isLoading: false, isStreaming: false, streamingMessage: "", error: null });
-    case "SET_LOADING":
-      return __spreadProps(__spreadValues({}, state), { isLoading: action.value });
-    case "ABORT":
-      return __spreadProps(__spreadValues({}, state), { isLoading: false, isStreaming: false, streamingMessage: "" });
-    default:
-      return state;
-  }
-}
-function useChat(config) {
-  var _a, _b;
-  const sessionIdRef = (0, import_react.useRef)((_a = config.sessionId) != null ? _a : generateId());
-  const [state, dispatch] = (0, import_react.useReducer)(
-    reducer,
-    void 0,
-    () => makeInitialState(config, sessionIdRef.current)
-  );
-  const abortControllerRef = (0, import_react.useRef)(null);
-  const systemPromptRef = (0, import_react.useRef)((_b = config.systemPrompt) != null ? _b : "");
-  const userContextRef = (0, import_react.useRef)(config.userContext);
-  const sendMessage = (0, import_react.useCallback)(
-    async (content) => {
-      if (!content.trim() || state.isLoading || state.isStreaming) return;
-      const userMessage = {
-        id: generateId(),
-        role: "user",
-        content: content.trim(),
-        createdAt: /* @__PURE__ */ new Date()
-      };
-      dispatch({ type: "ADD_USER_MESSAGE", message: userMessage });
-      const history = [...state.messages, userMessage];
-      setSessionMessages(config.userId, sessionIdRef.current, history);
-      const resolvedSystemPrompt = buildSystemPrompt(
-        systemPromptRef.current,
-        userContextRef.current
-      );
-      const mergedConfig = __spreadProps(__spreadValues({}, config), { systemPrompt: resolvedSystemPrompt });
-      let streamingStarted = false;
-      abortControllerRef.current = streamCompletion(history, mergedConfig, {
-        onChunk(text) {
-          if (!streamingStarted) {
-            streamingStarted = true;
-            dispatch({ type: "START_STREAMING" });
-          }
-          dispatch({ type: "APPEND_CHUNK", text });
-        },
-        onDone(fullText) {
-          const assistantMessage = {
-            id: generateId(),
-            role: "assistant",
-            content: fullText,
-            createdAt: /* @__PURE__ */ new Date()
-          };
-          setSessionMessages(config.userId, sessionIdRef.current, [...history, assistantMessage]);
-          dispatch({ type: "FINISH_STREAMING", assistantMessage });
-        },
-        onError(error) {
-          dispatch({ type: "SET_ERROR", error });
-        }
-      });
-    },
-    [config, state.messages, state.isLoading, state.isStreaming]
-  );
-  const abortResponse = (0, import_react.useCallback)(() => {
-    var _a2;
-    (_a2 = abortControllerRef.current) == null ? void 0 : _a2.abort();
-    dispatch({ type: "ABORT" });
-  }, []);
-  const clearHistory = (0, import_react.useCallback)(() => {
-    var _a2;
-    (_a2 = abortControllerRef.current) == null ? void 0 : _a2.abort();
-    clearSession(config.userId, sessionIdRef.current);
-    dispatch({ type: "CLEAR_HISTORY" });
-  }, [config.userId]);
-  const setSystemPrompt = (0, import_react.useCallback)((prompt) => {
-    systemPromptRef.current = prompt;
-  }, []);
-  const setUserContext = (0, import_react.useCallback)((ctx) => {
-    userContextRef.current = ctx;
-  }, []);
-  return __spreadProps(__spreadValues({}, state), {
-    sendMessage,
-    abortResponse,
-    clearHistory,
-    setSystemPrompt,
-    setUserContext
-  });
-}
+
+
+
+
+
+var _chunkNFLAWMIRjs = require('./chunk-NFLAWMIR.js');
 
 // src/adapters/vanilla.ts
 function createChat(config) {
   var _a, _b;
-  const sessionId = (_a = config.sessionId) != null ? _a : generateId();
-  const existingMessages = getSession(config.userId, sessionId).messages;
+  const sessionId = (_a = config.sessionId) != null ? _a : _chunkNFLAWMIRjs.generateId.call(void 0, );
+  const existingMessages = _chunkNFLAWMIRjs.getSession.call(void 0, config.userId, sessionId).messages;
   let state = {
     messages: existingMessages.length > 0 ? existingMessages : config.initialMessages ? [...config.initialMessages] : [],
     isLoading: false,
@@ -419,7 +32,7 @@ function createChat(config) {
   let systemPrompt = (_b = config.systemPrompt) != null ? _b : "";
   let userContext = config.userContext;
   function setState(partial) {
-    state = __spreadValues(__spreadValues({}, state), partial);
+    state = _chunkNFLAWMIRjs.__spreadValues.call(void 0, _chunkNFLAWMIRjs.__spreadValues.call(void 0, {}, state), partial);
     listeners.forEach((l) => l(state));
   }
   function subscribe(listener) {
@@ -429,18 +42,18 @@ function createChat(config) {
   async function sendMessage(content) {
     if (!content.trim() || state.isLoading || state.isStreaming) return;
     const userMessage = {
-      id: generateId(),
+      id: _chunkNFLAWMIRjs.generateId.call(void 0, ),
       role: "user",
       content: content.trim(),
       createdAt: /* @__PURE__ */ new Date()
     };
     const history = [...state.messages, userMessage];
     setState({ messages: history, isLoading: true, error: null });
-    setSessionMessages(config.userId, sessionId, history);
-    const resolvedSystemPrompt = buildSystemPrompt(systemPrompt, userContext);
-    const mergedConfig = __spreadProps(__spreadValues({}, config), { systemPrompt: resolvedSystemPrompt });
+    _chunkNFLAWMIRjs.setSessionMessages.call(void 0, config.userId, sessionId, history);
+    const resolvedSystemPrompt = _chunkNFLAWMIRjs.buildSystemPrompt.call(void 0, systemPrompt, userContext, config.assistantName);
+    const mergedConfig = _chunkNFLAWMIRjs.__spreadProps.call(void 0, _chunkNFLAWMIRjs.__spreadValues.call(void 0, {}, config), { systemPrompt: resolvedSystemPrompt });
     let streamingStarted = false;
-    abortController = streamCompletion(history, mergedConfig, {
+    abortController = _chunkNFLAWMIRjs.streamCompletion.call(void 0, history, mergedConfig, {
       onChunk(text) {
         if (!streamingStarted) {
           streamingStarted = true;
@@ -450,13 +63,13 @@ function createChat(config) {
       },
       onDone(fullText) {
         const assistantMessage = {
-          id: generateId(),
+          id: _chunkNFLAWMIRjs.generateId.call(void 0, ),
           role: "assistant",
           content: fullText,
           createdAt: /* @__PURE__ */ new Date()
         };
         const finalHistory = [...history, assistantMessage];
-        setSessionMessages(config.userId, sessionId, finalHistory);
+        _chunkNFLAWMIRjs.setSessionMessages.call(void 0, config.userId, sessionId, finalHistory);
         setState({ messages: finalHistory, isStreaming: false, streamingMessage: "" });
       },
       onError(error) {
@@ -470,7 +83,7 @@ function createChat(config) {
   }
   function clearHistory() {
     abortController == null ? void 0 : abortController.abort();
-    clearSession(config.userId, sessionId);
+    _chunkNFLAWMIRjs.clearSession.call(void 0, config.userId, sessionId);
     setState({ messages: [], isLoading: false, isStreaming: false, streamingMessage: "", error: null });
   }
   function setSystemPrompt(prompt) {
@@ -489,14 +102,13 @@ function createChat(config) {
     }
   );
 }
-// Annotate the CommonJS export names for ESM import in node:
-0 && (module.exports = {
-  anthropicAdapter,
-  buildSystemPrompt,
-  createChat,
-  generateId,
-  getAdapter,
-  openaiAdapter,
-  streamCompletion,
-  useChat
-});
+
+
+
+
+
+
+
+
+
+exports.anthropicAdapter = _chunkNFLAWMIRjs.anthropicAdapter; exports.buildSystemPrompt = _chunkNFLAWMIRjs.buildSystemPrompt; exports.createChat = createChat; exports.generateId = _chunkNFLAWMIRjs.generateId; exports.getAdapter = _chunkNFLAWMIRjs.getAdapter; exports.openaiAdapter = _chunkNFLAWMIRjs.openaiAdapter; exports.streamCompletion = _chunkNFLAWMIRjs.streamCompletion; exports.useChat = _chunkNFLAWMIRjs.useChat;

@@ -1,0 +1,6 @@
+{
+  "private": true,
+  "main": "../dist/native.js",
+  "module": "../dist/native.mjs",
+  "types": "../dist/native.d.ts"
+}

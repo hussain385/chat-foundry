@@ -50,32 +50,41 @@ export function clearSession(userId: string | undefined, sessionId: string): voi
 
 export function buildSystemPrompt(
     basePrompt: string | undefined,
-    userContext: UserContext | undefined
+    userContext: UserContext | undefined,
+    assistantName?: string
 ): string | undefined {
-    if (!userContext || Object.keys(userContext).length === 0) return basePrompt;
+    const sections: string[] = [];
 
-    const lines: string[] = ['[Current User Information]'];
+    if (assistantName?.trim()) {
+        sections.push(`Your name is ${assistantName.trim()}.`);
+    }
+    if (basePrompt) sections.push(basePrompt);
 
-    if (userContext.name) lines.push(`- Name: ${userContext.name}`);
-    if (userContext.email) lines.push(`- Email: ${userContext.email}`);
+    if (userContext && Object.keys(userContext).length > 0) {
+        const lines: string[] = ['[Current User Information]'];
 
-    // Append any extra fields generically
-    for (const [key, value] of Object.entries(userContext)) {
-        if (key === 'name' || key === 'email') continue;
-        let formatted: string;
-        if (Array.isArray(value)) {
-            formatted = value.join(', ');
-        } else if (typeof value === 'object' && value !== null) {
-            formatted = JSON.stringify(value);
-        } else {
-            formatted = String(value);
+        if (userContext.name) lines.push(`- Name: ${userContext.name}`);
+        if (userContext.email) lines.push(`- Email: ${userContext.email}`);
+
+        // Append any extra fields generically
+        for (const [key, value] of Object.entries(userContext)) {
+            if (key === 'name' || key === 'email') continue;
+            let formatted: string;
+            if (Array.isArray(value)) {
+                formatted = value.join(', ');
+            } else if (typeof value === 'object' && value !== null) {
+                formatted = JSON.stringify(value);
+            } else {
+                formatted = String(value);
+            }
+            const label = key.charAt(0).toUpperCase() + key.slice(1);
+            lines.push(`- ${label}: ${formatted}`);
         }
-        const label = key.charAt(0).toUpperCase() + key.slice(1);
-        lines.push(`- ${label}: ${formatted}`);
+
+        sections.push(lines.join('\n'));
     }
 
-    const contextBlock = lines.join('\n');
-    return basePrompt ? `${basePrompt}\n\n${contextBlock}` : contextBlock;
+    return sections.length > 0 ? sections.join('\n\n') : undefined;
 }
 
 // ---------------------------------------------------------------------------

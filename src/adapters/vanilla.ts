@@ -73,7 +73,7 @@ export function createChat(config: ChatConfig): ChatInstance {
         setState({ messages: history, isLoading: true, error: null });
         setSessionMessages(config.userId, sessionId, history);
 
-        const resolvedSystemPrompt = buildSystemPrompt(systemPrompt, userContext);
+        const resolvedSystemPrompt = buildSystemPrompt(systemPrompt, userContext, config.assistantName);
         const mergedConfig: ChatConfig = { ...config, systemPrompt: resolvedSystemPrompt };
 
         let streamingStarted = false;

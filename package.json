@@ -1,23 +1,36 @@
 {
   "name": "chat-foundry",
   "version": "0.1.5",
-  "description": "Headless, cross-platform chat logic for React, React Native, and vanilla JS. Supports OpenAI and Anthropic with streaming.",
+  "description": "Headless, cross-platform chat logic for React, React Native, and vanilla JS, with optional customizable chat UIs for web and React Native. Supports OpenAI and Anthropic with streaming.",
   "main": "dist/index.js",
   "module": "dist/index.mjs",
   "types": "dist/index.d.ts",
   "exports": {
     ".": {
+      "types": "./dist/index.d.ts",
       "import": "./dist/index.mjs",
-      "require": "./dist/index.js",
-      "types": "./dist/index.d.ts"
-    }
+      "require": "./dist/index.js"
+    },
+    "./ui": {
+      "types": "./dist/ui.d.ts",
+      "import": "./dist/ui.mjs",
+      "require": "./dist/ui.js"
+    },
+    "./native": {
+      "types": "./dist/native.d.ts",
+      "import": "./dist/native.mjs",
+      "require": "./dist/native.js"
+    },
+    "./package.json": "./package.json"
   },
   "files": [
-    "dist"
+    "dist",
+    "ui",
+    "native"
   ],
   "scripts": {
-    "build": "tsup src/index.ts --format cjs,esm --dts --clean",
-    "dev": "tsup src/index.ts --format cjs,esm --dts --watch",
+    "build": "tsup",
+    "dev": "tsup --watch",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -44,23 +57,44 @@
     "mobile-chatbot",
     "hook",
     "ai",
-    "llm"
+    "llm",
+    "chat-ui",
+    "chat-widget"
   ],
   "author": "",
   "license": "MIT",
   "peerDependencies": {
-    "react": ">=17.0.0"
+    "react": ">=17.0.0",
+    "react-native": ">=0.71.0"
   },
   "peerDependenciesMeta": {
     "react": {
+      "optional": true
+    },
+    "react-native": {
       "optional": true
     }
   },
   "devDependencies": {
     "@types/react": "^18.0.0",
-    "react": "^18.0.0",
+    "@types/react-dom": "^18.3.7",
+    "@types/react-test-renderer": "^18.3.1",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-native": "^0.74.7",
+    "react-test-renderer": "^18.2.0",
     "tsup": "^8.0.0",
     "typescript": "^5.0.0",
     "vitest": "^1.0.0"
+  },
+  "typesVersions": {
+    "*": {
+      "ui": [
+        "./dist/ui.d.ts"
+      ],
+      "native": [
+        "./dist/native.d.ts"
+      ]
+    }
   }
 }
